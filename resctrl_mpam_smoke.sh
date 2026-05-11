@@ -281,9 +281,12 @@ domain_id_for_schemata_prefix() {
 	esac
 }
 
-# First cache-allocation line (L3, L3DATA, L3CODE, L2, etc.); allow leading space
+# First cache-allocation line (L3, L3DATA, L3CODE, L2, etc.); allow leading space.
+# Require a colon after the resource name so L3_MAX:/L2_MAX: (percent limits) are not
+# mistaken for L3:/L2: CAT lines — MPAM exposes both, and L3_MAX appears first.
 l3_schemata_line() {
-	awk 'BEGIN{IGNORECASE=0} {gsub(/^[ \t]+|[ \t]+$/,"")} /^L2/ || /^L3/ {print; exit}' "$1" 2>/dev/null
+	awk 'BEGIN{IGNORECASE=0} {gsub(/^[ \t]+|[ \t]+$/,"")}
+		/^L2:/ || /^L3:/ || /^L3DATA:/ || /^L3CODE:/ {print; exit}' "$1" 2>/dev/null
 }
 
 # First cache domain id in a schemata line, e.g. "L3:1=fff;2=ff" -> 1
