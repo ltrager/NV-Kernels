@@ -410,7 +410,7 @@ test_closid_exhaust_and_keep() {
 }
 
 test_partition_schemata() {
-	local P D i pdir L3L old new want mbwant pfx
+	local P D i pdir L3L old new want mbwant mbold pfx
 	local min_bits cbm
 	echo "== schemata L3/MB readback per partition =="
 	[[ -n "${PART_PREFIX:-}" ]] || { skip "no partition dirs (run closid exhaust first)"; return 0; }
@@ -463,13 +463,33 @@ test_partition_schemata() {
 				pass "partition $i $pfx set (loose) $(tr -d '\n' < "$pdir/schemata" | head -c 120)..."
 			else
 				fail "L2/L3 readback for partition $i"
+				[[ -n "$old" ]] && echo "${pfx}:${D}=${old}" > "$pdir/schemata" 2>/dev/null || true
 				return 1
 			fi
+		fi
+		# Restore the original mask. rmdir frees the closid but does not
+		# scrub its hardware config (only unmount does), so a leftover
+		# flipped bit would leak into later tests that read the MSC
+		# registers directly (e.g. mpam_init_test.py).
+		if [[ -n "$old" ]] && ! echo "${pfx}:${D}=${old}" > "$pdir/schemata" 2>/dev/null; then
+			fail "restore ${pfx}:${D}=${old} in $pdir"
+			return 1
 		fi
 		# MB: percentage — MPAM / MBA style
 		if ((has_mb)); then
 			mbwant=$((20 + (i * 7) % 70))
 			((mbwant > 5 && mbwant < 100)) || mbwant=50
+			# l3_get_domain_value only accepts L2/L3 prefixes; parse the MB line directly
+			mbold=$(awk -v d="$D" '/^[[:space:]]*MB:/ {
+					sub(/^[[:space:]]*MB:/, "")
+					n = split($0, a, ";")
+					for (j = 1; j <= n; j++) {
+						split(a[j], kv, "=")
+						gsub(/[[:space:]]/, "", kv[1])
+						gsub(/[[:space:]]/, "", kv[2])
+						if (kv[1] == d) { print kv[2]; exit }
+					}
+				}' "$pdir/schemata" 2>/dev/null) || mbold=""
 			if ! echo "MB:${D}=$mbwant" > "$pdir/schemata" 2>/dev/null; then
 				skip "MB:${D}=$mbwant write to $pdir (optional)"
 			else
@@ -479,6 +499,8 @@ test_partition_schemata() {
 					grep -q "MB" "$pdir/schemata" && pass "partition $i MB line present" || \
 						skip "MB readback fuzzy for partition $i"
 				fi
+				# Restore the original MB value (same reason as L2/L3 above).
+				[[ -n "$mbold" ]] && echo "MB:${D}=${mbold}" > "$pdir/schemata" 2>/dev/null || true
 			fi
 		else
 			skip "no MB: line — skip MBW schemata for partition $i"
