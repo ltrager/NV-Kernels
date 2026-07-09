@@ -155,7 +155,10 @@ mon_dirs_with_file()
 	local file="$2"
 	local dir path
 
-	for dir in "${MON_DATA}/${prefix}"*; do
+	# Match only numeric domain ids (mon_L3_02, mon_MB_00). Control-only
+	# resources create empty monitor directories whose names share the
+	# prefix (mon_L3_MAX_02, mon_MB_HLIM_00) and must not match.
+	for dir in "${MON_DATA}/${prefix}"[0-9][0-9]; do
 		[ -d "$dir" ] || continue
 		path="${dir}/${file}"
 		if [ -f "$path" ]; then
@@ -244,7 +247,7 @@ test_llc_occupancy()
 {
 	local dir count=0
 
-	for dir in "${MON_DATA}/mon_L3_"*; do
+	for dir in "${MON_DATA}/mon_L3_"[0-9][0-9]; do
 		[ -d "$dir" ] || continue
 		count=$((count + 1))
 		if [ ! -f "${dir}/llc_occupancy" ]; then
@@ -258,7 +261,7 @@ test_llc_occupancy()
 		return
 	fi
 
-	pass "llc_occupancy present in all ${count} mon_L3_* directories"
+	pass "llc_occupancy present in all ${count} mon_L3_[0-9][0-9] directories"
 }
 
 test_mbm_total_placement()
@@ -300,7 +303,7 @@ test_mon_mb_dirs_not_empty_on_vera()
 		return
 	fi
 
-	for dir in "${MON_DATA}/mon_MB_"*; do
+	for dir in "${MON_DATA}/mon_MB_"[0-9][0-9]; do
 		[ -d "$dir" ] || continue
 		total=$((total + 1))
 		if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
